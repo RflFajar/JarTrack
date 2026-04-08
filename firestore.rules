@@ -1,0 +1,212 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - displayName: string (optional)
+    //   - photoURL: string (optional, uri format)
+    //   - age: number (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: /users/{uid}/activities/{activityId}
+    // Fields:
+    //   - uid: string (required)
+    //   - type: string (required, enum: ['study', 'exercise', 'nutrition'])
+    //   - value: number (required, positive)
+    //   - unit: string (required)
+    //   - timestamp: timestamp (required)
+    //   - note: string (optional)
+    //
+    // Collection: /users/{uid}/tasks/{taskId}
+    // Fields:
+    //   - uid: string (required)
+    //   - title: string (required, max 100 chars)
+    //   - completed: bool (required)
+    //   - createdAt: timestamp (required)
+    //   - completedAt: timestamp (optional)
+    //
+    // Collection: /users/{uid}/metrics/{metricId}
+    // Fields:
+    //   - uid: string (required)
+    //   - weight: number (optional, positive)
+    //   - height: number (optional, positive)
+    //   - age: number (optional)
+    //   - timestamp: timestamp (required)
+    //
+    // ===============================================================
+
+    // Collection: /users/{uid}/weekly_tasks/{taskId}
+    // Fields:
+    //   - uid: string (required)
+    //   - type: string (required, enum: ['study', 'exercise', 'nutrition'])
+    //   - day: string (required, enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
+    //   - title: string (required)
+    //   - description: string (optional)
+    //   - completed: bool (required)
+    //   - weekStart: string (required, YYYY-MM-DD)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url == null || (url is string && (url.matches("^https://.*") || url.matches("^http://.*")));
+    }
+
+    function isRecent(time) {
+      return time > request.time - duration.value(5, 'm') && time < request.time + duration.value(5, 'm');
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "muhraflifjr@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      let allowedFields = ['uid', 'email', 'displayName', 'photoURL', 'birthDate', 'gender', 'status', 'occupation', 'createdAt', 'role'];
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.createdAt is timestamp &&
+             (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || isValidUrl(data.photoURL)) &&
+             (!('birthDate' in data) || data.birthDate == null || (data.birthDate is string && data.birthDate.matches("^\\d{4}-\\d{2}-\\d{2}$"))) &&
+             (!('gender' in data) || data.gender == null || (data.gender in ['Male', 'Female', 'Other'])) &&
+             (!('status' in data) || data.status == null || (data.status in ['Single', 'Married'])) &&
+             (!('occupation' in data) || data.occupation == null || (data.occupation is string && data.occupation.size() < 100)) &&
+             (!('role' in data) || data.role == 'user'); // Users can't make themselves admin
+    }
+
+    function isValidTransaction(data) {
+      let allowedFields = ['uid', 'type', 'date', 'sourceOrCategory', 'amount', 'quantity', 'note'];
+      return data.keys().hasAll(['uid', 'type', 'date', 'sourceOrCategory', 'amount']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.uid == request.auth.uid &&
+             data.type in ['income', 'expense'] &&
+             data.date is timestamp &&
+             data.sourceOrCategory is string && data.sourceOrCategory.size() > 0 && data.sourceOrCategory.size() < 100 &&
+             data.amount is number && data.amount >= 0 &&
+             (!('quantity' in data) || data.quantity == null || (data.quantity is number && data.quantity >= 0)) &&
+             (!('note' in data) || data.note == null || (data.note is string && data.note.size() < 500));
+    }
+
+    function isValidActivity(data) {
+      let allowedFields = ['uid', 'type', 'value', 'unit', 'timestamp', 'note'];
+      return data.keys().hasAll(['uid', 'type', 'value', 'unit', 'timestamp']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.uid == request.auth.uid &&
+             data.type in ['study', 'exercise', 'nutrition'] &&
+             data.value is number && data.value >= 0 &&
+             data.unit is string && data.unit.size() > 0 && data.unit.size() < 20 &&
+             data.timestamp is timestamp &&
+             (!('note' in data) || data.note == null || (data.note is string && data.note.size() < 500));
+    }
+
+    function isValidTask(data) {
+      let allowedFields = ['uid', 'title', 'completed', 'createdAt', 'completedAt'];
+      return data.keys().hasAll(['uid', 'title', 'completed', 'createdAt']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.uid == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 100 &&
+             data.completed is bool &&
+             data.createdAt is timestamp &&
+             (!('completedAt' in data) || data.completedAt == null || data.completedAt is timestamp);
+    }
+
+    function isValidMetric(data) {
+      let allowedFields = ['uid', 'weight', 'height', 'timestamp'];
+      return data.keys().hasAll(['uid', 'timestamp']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.uid == request.auth.uid &&
+             data.timestamp is timestamp &&
+             (!('weight' in data) || data.weight == null || (data.weight is number && data.weight > 0)) &&
+             (!('height' in data) || data.height == null || (data.height is number && data.height > 0));
+    }
+
+    function isValidWeeklyTask(data) {
+      let allowedFields = ['uid', 'type', 'day', 'title', 'description', 'completed', 'weekStart'];
+      return data.keys().hasAll(['uid', 'type', 'day', 'title', 'completed', 'weekStart']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.uid == request.auth.uid &&
+             data.type in ['study', 'exercise', 'nutrition'] &&
+             data.day.lower() in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] &&
+             data.title is string && data.title.size() > 0 &&
+             data.completed is bool &&
+             data.weekStart is string && data.weekStart.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
+             (!('description' in data) || data.description == null || (data.description is string && data.description.size() < 500));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+
+      match /activities/{activityId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidActivity(request.resource.data);
+        allow update: if isOwner(userId) && isValidActivity(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /tasks/{taskId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTask(request.resource.data);
+        allow update: if isOwner(userId) && isValidTask(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /metrics/{metricId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidMetric(request.resource.data);
+        allow update: if isOwner(userId) && isValidMetric(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /weekly_tasks/{taskId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidWeeklyTask(request.resource.data);
+        allow update: if isOwner(userId) && isValidWeeklyTask(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow update: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

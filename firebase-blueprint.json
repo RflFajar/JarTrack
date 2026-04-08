@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique identifier for the user." },
+        "email": { "type": "string", "format": "email", "description": "User email address." },
+        "displayName": { "type": "string", "description": "User's display name." },
+        "photoURL": { "type": "string", "format": "uri", "description": "User's profile picture URL." },
+        "birthDate": { "type": "string", "format": "date", "description": "User's date of birth (YYYY-MM-DD)." },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other"], "description": "User's gender." },
+        "status": { "type": "string", "enum": ["Single", "Married"], "description": "User's marital status." },
+        "occupation": { "type": "string", "description": "User's occupation." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user account was created." }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "A logged activity (study, exercise, nutrition).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID who logged the activity." },
+        "type": { "type": "string", "enum": ["study", "exercise", "nutrition"], "description": "Type of activity." },
+        "value": { "type": "number", "description": "Numeric value (e.g., minutes, calories)." },
+        "unit": { "type": "string", "description": "Unit of the value (e.g., min, kcal, g)." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the activity occurred." },
+        "note": { "type": "string", "description": "Optional note about the activity." }
+      },
+      "required": ["uid", "type", "value", "timestamp"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A to-do list item.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID who owns the task." },
+        "title": { "type": "string", "description": "Task title." },
+        "completed": { "type": "boolean", "description": "Whether the task is completed." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the task was created." },
+        "completedAt": { "type": "string", "format": "date-time", "description": "When the task was completed." }
+      },
+      "required": ["uid", "title", "completed", "createdAt"]
+    },
+    "Metric": {
+      "title": "Metric",
+      "description": "Body growth metrics (weight, height).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID who owns the metric." },
+        "weight": { "type": "number", "description": "Weight in kg." },
+        "height": { "type": "number", "description": "Height in cm." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the metric was recorded." }
+      },
+      "required": ["uid", "timestamp"]
+    }
+    "WeeklyTask": {
+      "title": "WeeklyTask",
+      "description": "A task part of a weekly plan (study, exercise, nutrition).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID who owns the task." },
+        "type": { "type": "string", "enum": ["study", "exercise", "nutrition"], "description": "Type of plan." },
+        "day": { "type": "string", "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], "description": "Day of the week." },
+        "title": { "type": "string", "description": "Task title." },
+        "description": { "type": "string", "description": "Detailed instructions." },
+        "completed": { "type": "boolean", "description": "Whether the task is completed for this week." },
+        "weekStart": { "type": "string", "format": "date", "description": "The Monday of the week this task belongs to." }
+      },
+      "required": ["uid", "type", "day", "title", "completed", "weekStart"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction (income or expense).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID who owns the transaction." },
+        "type": { "type": "string", "enum": ["income", "expense"], "description": "Type of transaction." },
+        "date": { "type": "string", "format": "date-time", "description": "When the transaction occurred." },
+        "sourceOrCategory": { "type": "string", "description": "Source of income or category of expense." },
+        "amount": { "type": "number", "description": "Amount of money." },
+        "quantity": { "type": "number", "description": "Quantity for expenses." },
+        "note": { "type": "string", "description": "Optional note." }
+      },
+      "required": ["uid", "type", "date", "sourceOrCategory", "amount"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profile document." },
+    "/users/{uid}/activities/{activityId}": { "schema": "Activity", "description": "User's logged activities." },
+    "/users/{uid}/tasks/{taskId}": { "schema": "Task", "description": "User's to-do items." },
+    "/users/{uid}/metrics/{metricId}": { "schema": "Metric", "description": "User's body metrics." },
+    "/users/{uid}/weekly_tasks/{taskId}": { "schema": "WeeklyTask", "description": "User's weekly planned tasks." },
+    "/users/{uid}/transactions/{transactionId}": { "schema": "Transaction", "description": "User's financial transactions." }
+  }
+}
