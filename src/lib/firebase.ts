@@ -71,7 +71,7 @@ async function testConnection() {
     }
   }
 }
-testConnection();
+// testConnection(); // Matikan sementara untuk tes login;
 
 export type { 
   FirebaseUser
